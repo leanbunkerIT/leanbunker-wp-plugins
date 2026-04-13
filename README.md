@@ -23,23 +23,23 @@ Benvenuti nel repository ufficiale della community **Lean Bunker**. Qui troverai
 #### 🧱 Core & Framework
 | Plugin | Descrizione |
 | :--- | :--- |
-| 🔷 **lean-bunker-framework** | Il cuore del sistema. Librerie base e funzioni condivise. |
-| 🔷 **lean-bunker-clone** | Strumenti per la clonazione e gestione rapida dei siti. |
+| 🔷 **lean-bunker-framework** | cra cpt, field, e math calculaton. |
+| 🔷 **lean-bunker-clone** | Strumenti per la clonazione di pagine post e cpt. |
 | 🔷 **lean-bunker-autolang** | Automazione per la gestione multilingua. |
 
 #### 🤖 AI & Automation
 | Plugin | Descrizione |
 | :--- | :--- |
 | 🤖 **lean-bunker-html-ai** | Generazione e ottimizzazione HTML tramite Intelligenza Artificiale. |
-| 🤖 **lean-bunker-autopost** | Pubblicazione automatica di contenuti. |
-| 🤖 **lean-bunker-sitemap-autopost** | Gestione automatica sitemap e indicizzazione. |
+| 🤖 **lean-bunker-autopost** | Pubblicazione automatica di contenuti da title e feed. |
+| 🤖 **lean-bunker-sitemap-autopost** | Pubblicazione automatica di contenuti da sitemap. |
 | 🤖 **lean-bunker-frontend-post** | Permetti agli utenti di pubblicare direttamente dal frontend. |
 
 #### 🛒 Commerce & Content
 | Plugin | Descrizione |
 | :--- | :--- |
-| 🛒 **lean-bunker-commerce** | Estensioni e funzionalità avanzate per WooCommerce. |
-| 📝 **lean-bunker-archivie-comment** | Gestione avanzata dei commenti e archivi. |
+| 🛒 **lean-bunker-commerce** | eCommerce B2B e B2C per WordPress. |
+| 📝 **lean-bunker-archivie-comment** | Gestione avanzata dei commenti negli archivi archivi. |
 | 🔗 **lean-bunker-semantic-linker** | Ottimizzazione dei link interni semantici. |
 
 #### 🎨 Design & SEO
