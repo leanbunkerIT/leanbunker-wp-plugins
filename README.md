@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/leanbunker/leanbunker-wp-plugins/raw/main/lean-bunker-framework/screenshot.png" alt="Logo" width="100" style="border-radius: 50%; box-shadow: 0 0 20px rgba(220, 20, 20, 0.5);">
+  <img src="https://avatars.githubusercontent.com/u/275549537?v=4&size=64" alt="Logo" width="100" style="border-radius: 50%; box-shadow: 0 0 20px rgba(220, 20, 20, 0.5);">
 </p>
 
 <h1 align="center" style="color: #d32f2f; font-size: 3em; margin-bottom: 0;">LEAN BUNKER</h1>
