@@ -61,8 +61,8 @@ Grazie a chi rende possibile questo progetto:
 <a href="https://github.com/riccardobasti">
   <img src="https://github.com/riccardobasti.png" width="60px;" alt="Riccardo Basti" style="border-radius: 50%; border: 2px solid #d32f2f;"/>
 </a>
-<a href="https://github.com/wpseoitalia">
-  <img src="https://github.com/wpseoitalia.png" width="60px;" alt="wpseoitalia" style="border-radius: 50%; border: 2px solid #d32f2f;"/>
+<a href="https://github.com/seowpitalia">
+  <img src="https://github.com/seowpitalia.png" width="60px;" alt="wpseoitalia" style="border-radius: 50%; border: 2px solid #d32f2f;"/>
 </a>
 <a href="https://github.com/datRooster">
   <img src="https://github.com/datRooster.png" width="60px;" alt="datRooster" style="border-radius: 50%; border: 2px solid #d32f2f;"/>
