@@ -23,7 +23,7 @@ Benvenuti nel repository ufficiale della community **Lean Bunker**. Qui troverai
 #### 🧱 Core & Framework
 | Plugin | Descrizione |
 | :--- | :--- |
-| 🔷 **lean-bunker-framework** | cra cpt, field, e math calculaton. |
+| 🔷 **lean-bunker-framework** | crea cpt, field, e math calculaton. |
 | 🔷 **lean-bunker-clone** | Strumenti per la clonazione di pagine post e cpt. |
 | 🔷 **lean-bunker-autolang** | Automazione per la gestione multilingua. |
 
