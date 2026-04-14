@@ -332,7 +332,7 @@ class Lean_Admin {
         $base       = admin_url( 'admin.php?page=lean-autopost' );
         $type       = $data['type'] ?? ( isset( $_GET['type'] ) ? sanitize_text_field( $_GET['type'] ) : 'feed' );
         $taxonomies = get_taxonomies( [ 'public' => true ], 'objects' );
-        $terms      = ! empty( $data['taxonomy'] ) ? get_terms( $data['taxonomy'], [ 'hide_empty' => false ] ) : [];
+        $terms      = ! empty( $data['taxonomy'] ) ? get_terms( [ 'taxonomy' => $data['taxonomy'], 'hide_empty' => false ] ) : [];
         if ( is_wp_error( $terms ) ) $terms = [];
         $ajax_nonce = wp_create_nonce( 'lean_autopost_ajax' );
         ?>
@@ -614,7 +614,7 @@ class Lean_Admin {
             wp_send_json( [] );
         }
 
-        $terms = get_terms( $tax, [ 'hide_empty' => false ] );
+        $terms = get_terms( [ 'taxonomy' => $tax, 'hide_empty' => false ] );
         wp_send_json(
             is_wp_error( $terms )
                 ? []
