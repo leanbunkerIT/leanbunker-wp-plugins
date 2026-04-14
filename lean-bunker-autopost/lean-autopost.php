@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Lean Autopost
- * Description: Genera articoli automatici da Sitemap con Together AI. v3.2.5: Riscrittura verificata, prompt funzionante, formattazione paragrafi.
- * Version: 3.2.5
+ * Description: Genera articoli automatici da Sitemap con Together AI. v3.3.0: Batch per sitemap, citazione fonte, soglia similarità configurabile.
+ * Version: 3.3.0
  * Author: Riccardo Bastillo
  * Requires at least: WordPress 4.9
  * Requires PHP: 8.0
@@ -13,7 +13,7 @@ if (defined('LEAN_AUTOPOST_LOADED')) return;
 define('LEAN_AUTOPOST_LOADED', true);
 
 class Lean_Autopost {
-    private string $opt_sitemaps = 'lean_autopost_sitemaps';
+    private string $opt_sitemaps  = 'lean_autopost_sitemaps';
     private string $opt_processed = 'lean_autopost_processed_urls';
     private string $opt_settings  = 'lean_autopost_settings';
 
@@ -38,6 +38,7 @@ class Lean_Autopost {
         wp_clear_scheduled_hook('lean_autopost_run_sitemaps');
     }
 
+    /* ================= MENU & HANDLE ================= */
     public function menu(): void {
         add_menu_page('Lean Autopost', 'Lean Autopost', 'manage_options', 'lean-autopost', [$this, 'render_list'], 'dashicons-admin-post');
         add_submenu_page('lean-autopost', 'Impostazioni', 'Impostazioni', 'manage_options', 'lean-autopost-settings', [$this, 'settings_page']);
@@ -53,13 +54,15 @@ class Lean_Autopost {
                 if (!wp_verify_nonce($_POST['_wpnonce'] ?? '', 'lean_autopost_save')) wp_die(__('Security check failed.', 'lean-autopost'));
                 $id   = sanitize_text_field($_POST['id'] ?? uniqid('sm_'));
                 $data = [
-                    'sitemap_url'    => esc_url_raw(trim($_POST['sitemap_url'] ?? '')),
-                    'post_type'      => sanitize_text_field($_POST['post_type'] ?? 'post'),
-                    'taxonomy'       => sanitize_text_field($_POST['taxonomy'] ?? ''),
-                    'term'           => sanitize_text_field($_POST['term'] ?? ''),
-                    'category'       => sanitize_text_field($_POST['category'] ?? ''),
-                    'custom_prompt'  => wp_kses_post($_POST['custom_prompt'] ?? ''),
-                    'change_title'   => !empty($_POST['change_title']),
+                    'sitemap_url'   => esc_url_raw(trim($_POST['sitemap_url'] ?? '')),
+                    'post_type'     => sanitize_text_field($_POST['post_type'] ?? 'post'),
+                    'taxonomy'      => sanitize_text_field($_POST['taxonomy'] ?? ''),
+                    'term'          => sanitize_text_field($_POST['term'] ?? ''),
+                    'category'      => sanitize_text_field($_POST['category'] ?? ''),
+                    'custom_prompt' => wp_kses_post($_POST['custom_prompt'] ?? ''),
+                    'change_title'  => !empty($_POST['change_title']),
+                    'batch_size'    => max(1, min(5, absint($_POST['batch_size'] ?? 1))),
+                    'cite_source'   => !empty($_POST['cite_source']),
                 ];
                 if (empty($data['sitemap_url'])) wp_die(__('L\'URL della sitemap è obbligatorio.', 'lean-autopost'));
                 $items = get_option($this->opt_sitemaps, []);
@@ -70,9 +73,8 @@ class Lean_Autopost {
             }
             if (isset($_GET['action'], $_GET['id'], $_GET['_wpnonce']) && $_GET['action'] === 'delete_sitemap') {
                 if (!wp_verify_nonce($_GET['_wpnonce'], 'del')) wp_die(__('Security check failed.', 'lean-autopost'));
-                $id = sanitize_text_field($_GET['id']);
                 $items = get_option($this->opt_sitemaps, []);
-                unset($items[$id]);
+                unset($items[sanitize_text_field($_GET['id'])]);
                 update_option($this->opt_sitemaps, $items);
                 wp_safe_redirect(admin_url('admin.php?page=lean-autopost'));
                 exit;
@@ -91,7 +93,9 @@ class Lean_Autopost {
             if (!wp_verify_nonce($_POST['_wpnonce'] ?? '', 'lean_autopost_settings')) wp_die(__('Security check failed.'));
             update_option($this->opt_settings, [
                 'together_api_key' => sanitize_text_field($_POST['together_api_key'] ?? ''),
-                'qwen_model'       => sanitize_text_field($_POST['qwen_model'] ?: 'Qwen/Qwen2.5-7B-Instruct-Turbo')
+                'qwen_model'       => sanitize_text_field($_POST['qwen_model'] ?: 'Qwen/Qwen2.5-7B-Instruct-Turbo'),
+                'min_len'          => max(100, absint($_POST['min_len'] ?? 300)),
+                'sim_threshold'    => max(30, min(80, absint($_POST['sim_threshold'] ?? 65))),
             ]);
             wp_safe_redirect(add_query_arg('updated', '1', admin_url('admin.php?page=lean-autopost-settings')));
             exit;
@@ -109,6 +113,8 @@ class Lean_Autopost {
                 <table class="form-table">
                     <tr><th><label>Together AI API Key</label></th><td><input type="text" name="together_api_key" value="<?= esc_attr($s['together_api_key'] ?? '') ?>" class="regular-text" size="50"></td></tr>
                     <tr><th><label>Modello AI</label></th><td><input type="text" name="qwen_model" value="<?= esc_attr($s['qwen_model'] ?? 'Qwen/Qwen2.5-7B-Instruct-Turbo') ?>" class="regular-text" size="50"></td></tr>
+                    <tr><th><label><?= esc_html__('Lunghezza minima articolo (caratteri)', 'lean-autopost') ?></label></th><td><input type="number" name="min_len" value="<?= absint($s['min_len'] ?? 300) ?>" min="100"></td></tr>
+                    <tr><th><label><?= esc_html__('Soglia similarità riscrittura (30–80%)', 'lean-autopost') ?></label></th><td><input type="number" name="sim_threshold" value="<?= absint($s['sim_threshold'] ?? 65) ?>" min="30" max="80"> <small><?= esc_html__('Valori bassi = riscrittura più aggressiva', 'lean-autopost') ?></small></td></tr>
                 </table>
                 <?php submit_button(__('Salva', 'lean-autopost'), 'primary', 'save_api_settings'); ?>
             </form>
@@ -135,24 +141,29 @@ class Lean_Autopost {
             <?php if (empty($items)): ?>
                 <p><?= esc_html__('Nessuna sitemap configurata.', 'lean-autopost') ?></p>
             <?php else: ?>
-                <table class="wp-list-table widefat fixed striped"><thead><tr><th><?= esc_html__('URL Sitemap') ?></th><th><?= esc_html__('Ultima Esecuzione') ?></th><th><?= esc_html__('Azioni') ?></th></tr></thead><tbody>
-                <?php foreach ($items as $id => $item):
-                    $last_time = get_option("lean_autopost_sm_last_run_{$id}", 0);
-                    $last_str  = $last_time ? human_time_diff($last_time, time()) . ' ' . __('fa') : __('Mai');
-                    $edit_url  = add_query_arg('edit', $id, $base);
-                    $del_url   = wp_nonce_url(add_query_arg(['action' => 'delete_sitemap', 'id' => $id], $base), 'del');
-                    $run_url   = wp_nonce_url(add_query_arg(['action' => 'run_sitemap', 'id' => $id], $base), 'run');
-                ?>
-                <tr>
-                    <td><?= esc_html($item['sitemap_url']) ?></td>
-                    <td><?= esc_html($last_str) ?></td>
-                    <td>
-                        <a href="<?= esc_url($edit_url) ?>"><?= esc_html__('Modifica') ?></a> |
-                        <a href="<?= esc_url($del_url) ?>" onclick="return confirm('Eliminare?')"><?= esc_html__('Elimina') ?></a> |
-                        <a href="<?= esc_url($run_url) ?>"><?= esc_html__('Esegui') ?></a>
-                    </td>
-                </tr>
-                <?php endforeach; ?></tbody></table>
+                <table class="wp-list-table widefat fixed striped">
+                    <thead><tr><th><?= esc_html__('URL Sitemap') ?></th><th><?= esc_html__('Batch') ?></th><th><?= esc_html__('Cita fonte') ?></th><th><?= esc_html__('Ultima Esecuzione') ?></th><th><?= esc_html__('Azioni') ?></th></tr></thead>
+                    <tbody>
+                    <?php foreach ($items as $id => $item):
+                        $last_time = get_option("lean_autopost_sm_last_run_{$id}", 0);
+                        $last_str  = $last_time ? human_time_diff($last_time, time()) . ' ' . __('fa') : __('Mai');
+                        $edit_url  = add_query_arg('edit', $id, $base);
+                        $del_url   = wp_nonce_url(add_query_arg(['action' => 'delete_sitemap', 'id' => $id], $base), 'del');
+                        $run_url   = wp_nonce_url(add_query_arg(['action' => 'run_sitemap', 'id' => $id], $base), 'run');
+                    ?>
+                    <tr>
+                        <td><?= esc_html($item['sitemap_url']) ?></td>
+                        <td><?= absint($item['batch_size'] ?? 1) ?></td>
+                        <td><?= !empty($item['cite_source']) ? '✓' : '–' ?></td>
+                        <td><?= esc_html($last_str) ?></td>
+                        <td>
+                            <a href="<?= esc_url($edit_url) ?>"><?= esc_html__('Modifica') ?></a> |
+                            <a href="<?= esc_url($del_url) ?>" onclick="return confirm('Eliminare?')"><?= esc_html__('Elimina') ?></a> |
+                            <a href="<?= esc_url($run_url) ?>"><?= esc_html__('Esegui') ?></a>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?></tbody>
+                </table>
             <?php endif; ?>
         </div>
         <?php
@@ -172,32 +183,35 @@ class Lean_Autopost {
                 <?php wp_nonce_field('lean_autopost_save', '_wpnonce'); ?>
                 <input type="hidden" name="id" value="<?= esc_attr($id ?? uniqid('sm_')) ?>">
                 <table class="form-table">
-                    <tr><th><label>URL Sitemap (es. sitemap.xml)</label></th><td><input type="text" name="sitemap_url" value="<?= esc_attr($data['sitemap_url'] ?? '') ?>" required class="widefat"></td></tr>
+                    <tr><th><label>URL Sitemap</label></th><td><input type="url" name="sitemap_url" value="<?= esc_attr($data['sitemap_url'] ?? '') ?>" required class="widefat"></td></tr>
                     <tr><th><label>Post Type</label></th><td><select name="post_type"><?= $this->opts_html('post_type', $data['post_type'] ?? 'post') ?></select></td></tr>
                     <tr><th><label>Tassonomia</label></th><td><select name="taxonomy" id="tax-select"><option value=""><?= esc_html__('-- Nessuna --') ?></option><?= $this->opts_html('tax', $data['taxonomy'] ?? '', $taxonomies) ?></select></td></tr>
                     <tr><th><label>Termine</label></th><td><select name="term" id="term-select"><option value=""><?= esc_html__('-- Seleziona --') ?></option><?php foreach($terms as $t): ?><option value="<?= esc_attr($t->slug) ?>" <?= selected($data['term'] ?? '', $t->slug, false) ?>><?= esc_html($t->name) ?></option><?php endforeach; ?></select></td></tr>
                     <tr><th><label>Categoria (fallback)</label></th><td><input type="text" name="category" value="<?= esc_attr($data['category'] ?? '') ?>"></td></tr>
-                    <tr><th><label>Prompt AI (opzionale)</label></th><td><textarea name="custom_prompt" rows="4" class="large-text" placeholder="Es: Usa tono giornalistico, evidenzia i dati importanti, mantieni un linguaggio semplice"><?= esc_textarea($data['custom_prompt'] ?? '') ?></textarea><br><small style="color:#666">Istruzioni specifiche per la riscrittura AI</small></td></tr>
+                    <tr><th><label><?= esc_html__('Batch per ciclo (1–5)', 'lean-autopost') ?></label></th><td><input type="number" name="batch_size" min="1" max="5" value="<?= absint($data['batch_size'] ?? 1) ?>"></td></tr>
+                    <tr><th><label>Prompt AI (opzionale)</label></th><td><textarea name="custom_prompt" rows="3" class="large-text"><?= esc_textarea($data['custom_prompt'] ?? '') ?></textarea></td></tr>
                     <tr><th><label>Cambia Titolo?</label></th><td><input type="checkbox" name="change_title" value="1" <?= checked(!empty($data['change_title']), true, false) ?>></td></tr>
+                    <tr><th><label><?= esc_html__('Cita fonte nel testo', 'lean-autopost') ?></label></th><td><input type="checkbox" name="cite_source" value="1" <?= checked(!empty($data['cite_source']), true, false) ?>></td></tr>
                 </table>
                 <?php submit_button(__('Salva', 'lean-autopost'), 'primary', 'save_sitemap'); ?>
             </form>
         </div>
         <script>
         document.addEventListener('DOMContentLoaded', function() {
-            var tax = document.getElementById('tax-select'), term = document.getElementById('term-select');
-            if(tax && term) tax.onchange = function() {
-                if(!this.value) { term.innerHTML = '<option value="">-- Nessuno --</option>'; return; }
-                var x = new XMLHttpRequest(); x.open('POST', ajaxurl, true); 
-                x.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
-                x.onreadystatechange = function() { 
-                    if(x.readyState===4 && x.status===200) try {
-                        var d = JSON.parse(x.responseText), h = '<option value="">-- Seleziona --</option>';
-                        for(var i=0;i<d.length;i++) h+='<option value="'+d[i].slug+'">'+d[i].name+'</option>'; 
-                        term.innerHTML=h;
-                    } catch(e){} 
+            const tax = document.getElementById('tax-select'), term = document.getElementById('term-select');
+            if (tax && term) tax.onchange = function() {
+                if (!this.value) { term.innerHTML = '<option value="">-- Nessuno --</option>'; return; }
+                const x = new XMLHttpRequest(); x.open('POST', ajaxurl, true);
+                x.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                x.onreadystatechange = function() {
+                    if (x.readyState === 4 && x.status === 200) try {
+                        const d = JSON.parse(x.responseText);
+                        let h = '<option value="">-- Seleziona --</option>';
+                        d.forEach(t => h += `<option value="${t.slug}">${t.name}</option>`);
+                        term.innerHTML = h;
+                    } catch(e) {}
                 };
-                x.send('action=lean_autopost_terms&_ajax_nonce=<?= esc_js($ajax_nonce) ?>&taxonomy='+encodeURIComponent(this.value));
+                x.send('action=lean_autopost_terms&_ajax_nonce=<?= esc_js($ajax_nonce) ?>&taxonomy=' + encodeURIComponent(this.value));
             };
         });
         </script>
@@ -223,114 +237,66 @@ class Lean_Autopost {
     /* ================= CORE LOGIC ================= */
     private function get_settings(): array { return get_option($this->opt_settings, []); }
     private function get_api_key(): string { return $this->get_settings()['together_api_key'] ?? ''; }
-    private function get_model(): string { return $this->get_settings()['qwen_model'] ?? 'Qwen/Qwen2.5-7B-Instruct-Turbo'; }
-    
+    private function get_model(): string   { return $this->get_settings()['qwen_model'] ?? 'Qwen/Qwen2.5-7B-Instruct-Turbo'; }
+
+    private function log(string $msg): void {
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            error_log('[Lean Autopost] ' . $msg);
+        }
+    }
+
     private function ai_call(string $system, string $user, float $temp = 0.2): string {
         $res = wp_remote_post('https://api.together.ai/v1/chat/completions', [
             'headers' => ['Authorization' => 'Bearer ' . $this->get_api_key(), 'Content-Type' => 'application/json'],
             'body' => json_encode(['model' => $this->get_model(), 'messages' => [['role'=>'system','content'=>$system], ['role'=>'user','content'=>$user]], 'temperature'=>$temp]),
-            'timeout' => 30
+            'timeout' => 45
         ]);
-        if (is_wp_error($res)) { error_log('Lean AI Error: '.$res->get_error_message()); return ''; }
+        if (is_wp_error($res)) { $this->log('AI Error: ' . $res->get_error_message()); return ''; }
         $data = json_decode(wp_remote_retrieve_body($res), true);
         return $data['choices'][0]['message']['content'] ?? '';
     }
 
-    /**
-     * Verifica se il testo è stato effettivamente riscritto
-     */
-    private function verify_rewrite(string $original, string $rewritten): bool {
+    private function verify_rewrite(string $original, string $rewritten, int $threshold = 65): bool {
         if (empty($rewritten) || strlen($rewritten) < 100) return false;
-        
-        $orig_plain = strtolower(strip_tags($original));
-        $rewr_plain = strtolower(strip_tags($rewritten));
-        
-        similar_text($orig_plain, $rewr_plain, $percent);
-        
-        if ($percent > 65) {
-            error_log(sprintf('[Lean] Riscrittura rifiutata: similarità %d%%', $percent));
-            return false;
-        }
-        
-        error_log(sprintf('[Lean] Riscrittura valida: similarità %d%%', $percent));
-        return true;
+        similar_text(strtolower(strip_tags($original)), strtolower(strip_tags($rewritten)), $percent);
+        $ok = $percent <= $threshold;
+        $this->log(sprintf('Similarità: %d%% (%s)', $percent, $ok ? 'OK' : 'RIFIUTATO'));
+        return $ok;
     }
 
-    /**
-     * Estrae testo pulito dall'HTML
-     */
     private function extract_plain_text(string $html): string {
-        if (empty($html) || strlen($html) < 100) return '';
-        
-        $html = preg_replace('#<(script|style)[^>]*>.*?</\1>#is', '', $html);
+        if (strlen($html) < 100) return '';
+        $html = preg_replace('#<(script|style|nav|footer|aside)[^>]*>.*?</\1>#is', '', $html);
         $html = preg_replace('#<!--.*?-->#s', '', $html);
-        
-        $enc = mb_detect_encoding($html, ['UTF-8','ISO-8859-1','Windows-1252'], true);
+        $enc  = mb_detect_encoding($html, ['UTF-8','ISO-8859-1','Windows-1252'], true);
         if ($enc && $enc !== 'UTF-8') $html = mb_convert_encoding($html, 'UTF-8', $enc);
-        
-        $dom = new DOMDocument(); 
-        libxml_use_internal_errors(true);
+        $dom = new DOMDocument(); libxml_use_internal_errors(true);
         if (!$dom->loadHTML('<?xml encoding="UTF-8" ?>' . $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD)) return '';
-        libxml_clear_errors(); 
-        
+        libxml_clear_errors();
         $xpath = new DOMXPath($dom);
-        
-        $remove_queries = [
-            '//script', '//style', '//nav', '//footer', '//aside', 
-            '//div[contains(@class,"share") or contains(@class,"social") or contains(@class,"navigation") or contains(@class,"copyright")]',
-            '//*[contains(text(),"prevPageLabel") or contains(text(),"nextPageLabel") or contains(text(),"Condividi") or contains(text(),"Riproduzione riservata") or contains(text(),"Copyright")]'
-        ];
-        
-        foreach ($remove_queries as $query) {
-            $nodes = $xpath->query($query);
-            $to_remove = [];
-            foreach ($nodes as $node) $to_remove[] = $node;
-            foreach ($to_remove as $node) {
-                if ($node->parentNode) $node->parentNode->removeChild($node);
-            }
+        foreach ([
+            '//div[contains(@class,"share") or contains(@class,"social") or contains(@class,"nav") or contains(@class,"copyright")]',
+            '//*[contains(text(),"Condividi") or contains(text(),"prevPage") or contains(text(),"nextPage") or contains(text(),"Riproduzione riservata") or contains(text(),"Copyright")]'
+        ] as $q) {
+            foreach ($xpath->query($q) ?: [] as $n) if ($n->parentNode) $n->parentNode->removeChild($n);
         }
-        
-        foreach (['//article', '//main', '//div[contains(@class,"entry-content") or contains(@class,"post-content")]', '//div[@id="content"]'] as $query) {
-            $nodes = $xpath->query($query);
+        foreach (['//article','//main','//div[contains(@class,"entry-content") or contains(@class,"post-content")]','//div[@id="content"]'] as $q) {
+            $nodes = $xpath->query($q);
             if ($nodes && $nodes->length > 0) {
-                $text = $nodes->item(0)->textContent;
-                $text = trim(preg_replace('/\s+/', ' ', $text));
+                $text = trim(preg_replace('/\s+/u', ' ', $nodes->item(0)->textContent));
                 if (strlen($text) >= 100) return $text;
             }
         }
-        
-        $body = $xpath->query('//body')->item(0);
-        if ($body) {
-            $text = $body->textContent;
-            return trim(preg_replace('/\s+/', ' ', $text));
-        }
-        
-        return '';
+        return trim(preg_replace('/\s+/u', ' ', $dom->textContent));
     }
 
-    /**
-     * Formatta testo in paragrafi HTML
-     */
     private function format_as_paragraphs(string $text): string {
-        $text = trim($text);
-        if (empty($text)) return '';
-        
-        $paragraphs = preg_split('/\n\s*\n|\r\n\r\n|(?<=[.!?])\s+(?=[A-ZÀ-Û])/', $text);
-        $html_parts = [];
-        
-        foreach ($paragraphs as $p) {
-            $p = trim($p);
-            if (strlen($p) < 30) continue;
-            
-            $p = preg_replace('/(prevPageLabel|nextPageLabel|Condividi|Riproduzione riservata|Copyright).*/i', '', $p);
-            $p = trim($p);
-            
-            if (strlen($p) >= 50) {
-                $html_parts[] = '<p>' . wp_kses_post($p) . '</p>';
-            }
+        $parts = [];
+        foreach (preg_split('/\n\s*\n|\r\n\r\n|(?<=[.!?])\s+(?=[A-ZÀ-Û])/', $text) as $p) {
+            $p = trim(preg_replace('/\s+/u', ' ', $p));
+            if (strlen($p) >= 50) $parts[] = '<p>' . wp_kses_post($p) . '</p>';
         }
-        
-        return implode("\n\n", $html_parts);
+        return implode("\n\n", $parts) ?: '<p>' . wp_kses_post(wp_trim_words($text, 50)) . '</p>';
     }
 
     private function parse_sitemap(string $url): array {
@@ -348,11 +314,15 @@ class Lean_Autopost {
         return array_unique($urls);
     }
 
-    private function mark_processed(string $url): void {
+    private function mark_processed(string $url, string $source_id): void {
         $cache = get_option($this->opt_processed, []);
-        $cache[$url] = time();
+        $cache["$source_id:$url"] = time();
         if (count($cache) > 10000) { arsort($cache); $cache = array_slice($cache, 0, 10000, true); }
         update_option($this->opt_processed, $cache);
+    }
+
+    private function is_processed(string $url, string $source_id): bool {
+        return isset(get_option($this->opt_processed, [])["$source_id:$url"]);
     }
 
     private function publish(array $cfg, string $title, string $content): bool {
@@ -378,116 +348,99 @@ class Lean_Autopost {
         return true;
     }
 
-    /* ================= PROCESSOR (CORRETTO) ================= */
+    /* ================= PROCESSOR ================= */
     private function process_sitemap(array $src, string $id): void {
-        $api = $this->get_api_key(); 
+        $api = $this->get_api_key();
         if (empty($src['sitemap_url']) || !$api) return;
-        
-        $urls = $this->parse_sitemap($src['sitemap_url']); 
+        $urls = $this->parse_sitemap($src['sitemap_url']);
         if (empty($urls)) return;
-        
-        // Ultimi 5 post non processati
-        $cache = get_option($this->opt_processed, []);
-        $targets = [];
-        foreach ($urls as $u) { 
-            if (!isset($cache[$u]) && count($targets) < 5) { 
-                $targets[] = $u;
-            } 
-        }
-        
-        if (empty($targets)) return;
-        
-        foreach ($targets as $target) {
-            $res = wp_remote_get($target, ['timeout'=>15, 'sslverify'=>false]);
-            if (is_wp_error($res) || empty(wp_remote_retrieve_body($res))) continue;
-            
-            // Estrae SOLO testo pulito
+
+        $settings      = $this->get_settings();
+        $batch         = max(1, min(5, absint($src['batch_size'] ?? 1)));
+        $min_len       = max(100, absint($settings['min_len'] ?? 300));
+        $sim_threshold = max(30, min(80, absint($settings['sim_threshold'] ?? 65)));
+        $published     = 0;
+
+        foreach ($urls as $url) {
+            if ($published >= $batch) break;
+            if ($this->is_processed($url, $id)) continue;
+
+            $res = wp_remote_get($url, ['timeout'=>15, 'sslverify'=>false]);
+            if (is_wp_error($res) || empty(wp_remote_retrieve_body($res))) { $this->mark_processed($url, $id); continue; }
+
             $plain = $this->extract_plain_text(wp_remote_retrieve_body($res));
-            if (empty($plain) || strlen($plain) < 100) {
-                $this->mark_processed($target);
-                continue;
-            }
+            if (strlen($plain) < 100) { $this->mark_processed($url, $id); continue; }
 
-            $title = wp_trim_words($plain, 10);
-            $final = ''; // IMPORTANTE: parte vuoto!
+            $title       = wp_trim_words($plain, 12);
+            $source_note = !empty($src['cite_source']) ? "\n\nFonte: " . wp_parse_url($url, PHP_URL_HOST) : '';
+            $final       = '';
 
-            // === AI REWRITE CON PROMPT MIGLIORATO ===
-            $sys = "Sei un giornalista professionista italiano. DEVI riscrivere COMPLETAMENTE questa notizia:\n\n"
-                 . "REGOLE OBBLIGATORIE:\n"
-                 . "1. CAMBIA tutte le frasi, la struttura e il lessico\n"
-                 . "2. MANTIENI solo i fatti essenziali\n"
-                 . "3. OUTPUT: SOLO paragrafi HTML <p> e sottotitoli <h2>\n"
-                 . "4. VIETATO copiare frasi dall'originale (massimo 30% similarità)\n"
-                 . "5. NIENTE markdown, saluti, copyright, note legali\n"
-                 . "6. Inizia direttamente con <h2> o <p>\n"
-                 . "7. Scrivi almeno 3-4 paragrafi ben strutturati\n\n";
-            
-            if (!empty($src['custom_prompt'])) {
-                $sys .= "ISTRUZIONI PERSONALIZZATE: " . trim($src['custom_prompt']) . "\n\n";
-            }
-            
-            $sys .= "TESTO ORIGINALE DA RISCRIRE:\n";
+            // AI Rewrite
+            $sys = "Sei un giornalista italiano. Riscrivi COMPLETAMENTE questa notizia:\n"
+                 . "- CAMBIA frasi, struttura, lessico; MANTIENI i fatti\n"
+                 . "- OUTPUT: SOLO HTML WordPress (<h2> sottotitoli, <p> paragrafi)\n"
+                 . "- VIETATO: copiare frasi originali, markdown, saluti, copyright\n"
+                 . "- Inizia con <h2> o <p>. Scrivi 3-4 paragrafi minimi.";
+            if (!empty($src['custom_prompt'])) $sys .= "\n" . trim($src['custom_prompt']);
 
-            $rewritten = $this->ai_call($sys, $plain, 0.5); // Temperatura più alta
+            $rewritten = $this->ai_call($sys, $plain, 0.5);
 
             if (!empty($rewritten)) {
-                // Pulizia markdown
                 $rewritten = preg_replace('/^```[\w]*\s*/m', '', $rewritten);
                 $rewritten = preg_replace('/\s*```$/m', '', $rewritten);
                 $rewritten = preg_replace('/^.*?(?=<h[2-6]|<p)/is', '', $rewritten);
                 $rewritten = trim($rewritten);
-
-                // Validazione: tag HTML + similarità accettabile
-                if (strlen($rewritten) >= 150 && 
-                    preg_match('/<(h[2-6]|p|ul)[\s>]/i', $rewritten) && 
-                    $this->verify_rewrite($plain, $rewritten)) {
-                    $final = $rewritten;
-                    error_log('[Lean] AI rewrite riuscito e verificato');
+                if (strlen($rewritten) >= $min_len &&
+                    preg_match('/<(h[2-6]|p|ul)[\s>]/i', $rewritten) &&
+                    $this->verify_rewrite($plain, $rewritten, $sim_threshold)) {
+                    $final = $rewritten . $source_note;
+                    $this->log('AI rewrite OK');
                 }
             }
 
-            // FALLBACK: Formatta automaticamente in paragrafi
             if (empty($final)) {
-                $final = $this->format_as_paragraphs($plain);
-                error_log('[Lean] Usato fallback formattazione automatica');
+                $final = $this->format_as_paragraphs($plain) . $source_note;
+                $this->log('Fallback formattazione automatica');
             }
 
             // AI Title
             if (!empty($src['change_title']) && strlen($plain) > 50) {
-                $t = $this->ai_call("Crea SOLO un titolo giornalistico accattivante in italiano (max 100 caratteri). NIENTE ALTRO.", wp_trim_words($plain, 300), 0.7);
+                $t = $this->ai_call('SOLO un titolo giornalistico italiano (max 100 char). NIENTE ALTRO.', wp_trim_words($plain, 300), 0.7);
                 $t = trim(wp_strip_all_tags($t));
-                if (strlen($t) >= 5 && strlen($t) <= 100) {
-                    $title = sanitize_text_field($t);
-                }
+                if (strlen($t) >= 5 && strlen($t) <= 100) $title = sanitize_text_field($t);
             }
 
             if ($this->publish($src, $title, $final)) {
-                $this->mark_processed($target);
+                $this->mark_processed($url, $id);
+                $published++;
                 update_option("lean_autopost_sm_last_run_{$id}", time());
-                error_log('[Lean] Pubblicato: ' . $title);
+                $this->log("Pubblicato: $title");
             }
         }
+        $this->log("Ciclo completato: {$published}/{$batch} articoli");
     }
 
     /* ================= CRON ================= */
     public function cron_run(): void {
         if (get_transient('lean_autopost_cron_lock')) return;
-        set_transient('lean_autopost_cron_lock', true, 45);
+        set_transient('lean_autopost_cron_lock', true, 120);
 
-        $items = get_option($this->opt_sitemaps, []); if (empty($items)) return;
-        $ids = array_keys($items);
-        $last = get_option('lean_autopost_sm_last_id', '');
+        $items = get_option($this->opt_sitemaps, []);
+        if (empty($items)) { delete_transient('lean_autopost_cron_lock'); return; }
+        $ids   = array_keys($items);
+        $last  = get_option('lean_autopost_sm_last_id', '');
         $start = ($last && in_array($last, $ids, true)) ? (array_search($last, $ids, true) + 1) % count($ids) : 0;
-        
-        for ($i=0; $i<count($ids); $i++) {
+
+        for ($i = 0; $i < count($ids); $i++) {
             $idx = ($start + $i) % count($ids);
-            $id = $ids[$idx];
+            $id  = $ids[$idx];
             if (time() - get_option("lean_autopost_sm_last_run_{$id}", 0) >= 300) {
                 $this->process_sitemap($items[$id], $id);
                 update_option('lean_autopost_sm_last_id', $id);
                 break;
             }
         }
+        delete_transient('lean_autopost_cron_lock');
     }
 }
 
