@@ -372,7 +372,11 @@ class Lean_Autopost {
             if (strlen($plain) < 100) { $this->mark_processed($url, $id); continue; }
 
             $title       = wp_trim_words($plain, 12);
-            $source_note = !empty($src['cite_source']) ? "\n\nFonte: " . wp_parse_url($url, PHP_URL_HOST) : '';
+            $source_note = '';
+            if (!empty($src['cite_source'])) {
+                $host = wp_parse_url($url, PHP_URL_HOST);
+                if ($host) $source_note = "\n\nFonte: " . $host;
+            }
             $final       = '';
 
             // AI Rewrite
@@ -381,7 +385,9 @@ class Lean_Autopost {
                  . "- OUTPUT: SOLO HTML WordPress (<h2> sottotitoli, <p> paragrafi)\n"
                  . "- VIETATO: copiare frasi originali, markdown, saluti, copyright\n"
                  . "- Inizia con <h2> o <p>. Scrivi 3-4 paragrafi minimi.";
-            if (!empty($src['custom_prompt'])) $sys .= "\n" . trim($src['custom_prompt']);
+            if (!empty($src['custom_prompt'])) {
+                $sys .= "\n" . trim($src['custom_prompt']);
+            }
 
             $rewritten = $this->ai_call($sys, $plain, 0.5);
 
