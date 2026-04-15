@@ -14,39 +14,39 @@
 ---
 
 ### 🚀 About
-Benvenuti nel repository ufficiale della community **Lean Bunker**. Qui troverai una suite completa di plugin WordPress sviluppati per potenziare, automatizzare e migliorare il tuo sito. Dal framework principale agli strumenti di AI e SEO.
+Welcome to the official **Lean Bunker** community repository. Here you'll find a complete suite of WordPress plugins developed to enhance, automate, and improve your website. From the core framework to AI and SEO tools.
 
 ---
 
 ### 📦 Plugin Collection
 
 #### 🧱 Core & Framework
-| Plugin | Descrizione |
+| Plugin | Description |
 | :--- | :--- |
-| 🔷 **lean-bunker-framework** | crea cpt, field, e math calculaton. |
-| 🔷 **lean-bunker-clone** | Strumenti per la clonazione di pagine post e cpt. |
-| 🔷 **lean-bunker-autolang** | Automazione per la gestione multilingua. |
+| 🔷 **lean-bunker-framework** | Creates CPTs, fields, and math calculations. |
+| 🔷 **lean-bunker-clone** | Tools for cloning pages, posts, and CPTs. |
+| 🔷 **lean-bunker-autolang** | Automation for multilingual content management. |
 
 #### 🤖 AI & Automation
-| Plugin | Descrizione |
+| Plugin | Description |
 | :--- | :--- |
-| 🤖 **lean-bunker-html-ai** | Generazione e ottimizzazione HTML tramite Intelligenza Artificiale. |
-| 🤖 **lean-bunker-autopost** | Pubblicazione automatica di contenuti da title e feed. |
-| 🤖 **lean-bunker-sitemap-autopost** | Pubblicazione automatica di contenuti da sitemap. |
-| 🤖 **lean-bunker-frontend-post** | Permetti agli utenti di pubblicare direttamente dal frontend. |
+| 🤖 **lean-bunker-html-ai** | HTML generation and optimization via Artificial Intelligence. |
+| 🤖 **lean-bunker-autopost** | Automatic content publishing from titles and feeds. |
+| 🤖 **lean-bunker-sitemap-autopost** | Automatic content publishing from sitemaps. |
+| 🤖 **lean-bunker-frontend-post** | Allow users to publish content directly from the frontend. |
 
 #### 🛒 Commerce & Content
-| Plugin | Descrizione |
+| Plugin | Description |
 | :--- | :--- |
-| 🛒 **lean-bunker-commerce** | eCommerce B2B e B2C per WordPress. |
-| 📝 **lean-bunker-archivie-comment** | Gestione avanzata dei commenti negli archivi archivi. |
-| 🔗 **lean-bunker-semantic-linker** | Ottimizzazione dei link interni semantici. |
+| 🛒 **lean-bunker-commerce** | B2B and B2C eCommerce solution for WordPress. |
+| 📝 **lean-bunker-archivie-comment** | Advanced comment management in archive pages. |
+| 🔗 **lean-bunker-semantic-linker** | Optimization of semantic internal linking. |
 
 #### 🎨 Design & SEO
-| Plugin | Descrizione |
+| Plugin | Description |
 | :--- | :--- |
-| 🔍 **lean-bunker-seo** | Strumenti essenziali per il Search Engine Optimization. |
-| 🎨 **lean-bunker-style-table** | Styling avanzato per le tabelle WordPress. |
+| 🔍 **lean-bunker-seo** | Essential tools for Search Engine Optimization. |
+| 🎨 **lean-bunker-style-table** | Advanced styling for WordPress tables. |
 
 ---
 
@@ -56,7 +56,7 @@ Benvenuti nel repository ufficiale della community **Lean Bunker**. Qui troverai
 </p>
 
 ### 👥 Contributors
-Grazie a chi rende possibile questo progetto:
+Thanks to those who make this project possible:
 <br>
 <a href="https://github.com/riccardobasti">
   <img src="https://github.com/riccardobasti.png" width="60px;" alt="Riccardo Basti" style="border-radius: 50%; border: 2px solid #d32f2f;"/>
